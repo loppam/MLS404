@@ -1,0 +1,109 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if user is an admin
+    function isAdmin() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Helper function to check if any admin exists
+    function adminExists() {
+      return exists(/databases/$(database)/documents/users) &&
+        get(/databases/$(database)/documents/users).data.role == 'admin';
+    }
+
+    // Helper functions
+    function isStaff() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'staff';
+    }
+    
+    function isStudent() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student';
+    }
+
+    // Helper function to check if user is the teacher of a class
+    function isClassTeacher(classId) {
+      return isStaff() && 
+        get(/databases/$(database)/documents/classes/$(classId)).data.teacherId == request.auth.uid;
+    }
+
+    // Helper function to check if user is a student in a class
+    function isClassStudent(classId) {
+      return isStudent() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.classId == classId;
+    }
+
+    // Users collection rules
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if true; // Allow initial admin creation
+      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Fees collection rules
+    match /fees/{feeId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Classes collection rules
+    match /classes/{classId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Timetable collection rules
+    match /timetable/{timetableId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isStaff();
+    }
+
+    // Attendance collection rules
+    match /attendance/{attendanceId} {
+      allow read: if isAuthenticated();
+      allow write: if isStaff() || isAdmin();
+    }
+
+    // Payments collection
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.studentId || 
+        isAdmin() || 
+        isStaff()
+      );
+      allow create: if isAuthenticated();
+      allow update: if isAdmin() || isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // Assignments collection rules
+    match /assignments/{assignmentId} {
+      allow read: if isAuthenticated() && (isAdmin() || isStaff() || isStudent());
+      allow create: if isStaff() && isClassTeacher(request.resource.data.classId);
+      allow update: if isStaff() && isClassTeacher(resource.data.classId);
+      allow delete: if isAdmin() || (isStaff() && isClassTeacher(resource.data.classId));
+    }
+
+    // Grades collection rules
+    match /grades/{gradeId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        isStaff() || 
+        (isStudent() && request.auth.uid == resource.data.studentId)
+      );
+      allow create: if isStaff() && isClassTeacher(request.resource.data.classId);
+      allow update: if isStaff() && isClassTeacher(resource.data.classId);
+      allow delete: if isAdmin() || (isStaff() && isClassTeacher(resource.data.classId));
+    }
+  }
+} 
