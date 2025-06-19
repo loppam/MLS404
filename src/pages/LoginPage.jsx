@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { motion } from "framer-motion";
@@ -8,8 +8,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loginAttempted, setLoginAttempted] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, currentUser } = useAuth();
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -18,13 +19,19 @@ export default function LoginPage() {
       setError("");
       setLoading(true);
       await login(email, password);
-      navigate("/dashboard");
+      setLoginAttempted(true);
     } catch (error) {
       setError("Failed to sign in. Please check your credentials.");
     } finally {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (loginAttempted && currentUser) {
+      navigate("/dashboard");
+    }
+  }, [loginAttempted, currentUser, navigate]);
 
   return (
     <div className="min-h-screen flex">
